@@ -324,6 +324,74 @@ def test_cmd_test_step_skipped(
     )
 
 
+def test_cmd_test_summary_prints_enabled_step_timing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from dawnpy_tests.commands.cmd_test import do_cmd_test
+
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._validate_project_root",
+        lambda *a: True,
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.check_test_environment", lambda: True
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._resolve_test_context",
+        lambda *a, **k: (tmp_path, tmp_path / "config", tmp_path / "manifest"),
+    )
+
+    steps = [
+        {
+            "name": "run_a",
+            "enabled": True,
+            "function": lambda *a: True,
+            "args": [],
+        },
+        {
+            "name": "filtered",
+            "enabled": False,
+            "function": lambda *a: False,
+            "args": [],
+        },
+        {
+            "name": "run_b",
+            "enabled": True,
+            "function": lambda *a: True,
+            "args": [],
+        },
+    ]
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.build_test_steps",
+        lambda *a, **k: steps,
+    )
+    times = iter([10.0, 12.5, 20.0, 21.25])
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.perf_counter", lambda: next(times)
+    )
+
+    do_cmd_test(
+        "config",
+        "root",
+        "test_dir",
+        60,
+        None,
+        False,
+        False,
+        False,
+        False,
+        "list",
+    )
+
+    captured = capsys.readouterr()
+    assert "run_a: 2.50s" in captured.out
+    assert "run_b: 1.25s" in captured.out
+    assert "filtered" not in captured.out
+    assert "Total execution time: 3.75s" in captured.out
+
+
 def test_resolve_default_path_prefers_cwd(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
