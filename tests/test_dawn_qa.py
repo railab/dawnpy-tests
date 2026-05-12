@@ -196,10 +196,27 @@ def test_run_cppcheck(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_run_batch_build(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, patch_project_resolve
 ) -> None:
     project_root = tmp_path / "root"
     project_root.mkdir()
+    patch_project_resolve(project_root)
+
+    config_file = project_root / "config.txt"
+    config_file.write_text(
+        "boards/sim/sim/sim/configs/nsh_tests\n",
+        encoding="utf-8",
+    )
+    stale_build = project_root / "build" / "build-sim-sim-nsh-tests"
+    stale_include = stale_build / "include" / "nuttx"
+    stale_include.mkdir(parents=True)
+    for stale_file in (
+        stale_build / ".config",
+        stale_build / ".config.orig",
+        stale_build / ".config.prev",
+        stale_include / "config.h",
+    ):
+        stale_file.write_text("stale\n", encoding="utf-8")
 
     captured = {}
 
@@ -216,6 +233,10 @@ def test_run_batch_build(
     assert "--build-root" in captured["cmd"]
     assert "-j" in captured["cmd"]
     assert "2" in captured["cmd"]
+    assert not (stale_build / ".config").exists()
+    assert not (stale_build / ".config.orig").exists()
+    assert not (stale_build / ".config.prev").exists()
+    assert not (stale_include / "config.h").exists()
 
     monkeypatch.setattr(
         subprocess,

@@ -156,6 +156,12 @@ def run_batch_build(
     print_info("Step 1: Building all configurations...")
     click.echo()
 
+    config_path = (project_root / config_file).resolve()
+    if not _reset_batch_build_configs(
+        config_path, project_root, build_root, verbose
+    ):
+        return False
+
     cmd = [sys.executable, "-m", "dawnpy", "batch", config_file]
     cmd.extend(["--build-root", build_root])
     if jobs is not None:
@@ -197,6 +203,55 @@ def _parse_batch_confpaths(config_file_path: Path) -> list[str] | None:
         confpaths.append(parts[0])
 
     return confpaths
+
+
+def _batch_build_dirs(
+    config_file_path: Path, project_root: Path, build_root: str
+) -> list[Path] | None:
+    confpaths = _parse_batch_confpaths(config_file_path)
+    if confpaths is None:
+        return None
+
+    build_root_arg = Path(build_root)
+    if build_root_arg.is_absolute():
+        build_root_path = build_root_arg.resolve()
+    else:
+        build_root_path = (project_root / build_root_arg).resolve()
+
+    build_dirs: list[Path] = []
+    for confpath in confpaths:
+        resolved_confpath = confpath
+        candidate = (config_file_path.parent / confpath).resolve()
+        if candidate.exists():
+            resolved_confpath = str(candidate)
+
+        config_project = Project.resolve(Path(resolved_confpath))
+        build_dirs.append(
+            build_root_path
+            / generate_build_dir_name(
+                resolved_confpath,
+                project_root=config_project.project_root,
+                dawn_root=config_project.dawn_root,
+            )
+        )
+
+    return build_dirs
+
+
+def _reset_batch_build_configs(
+    config_file_path: Path,
+    project_root: Path,
+    build_root: str,
+    verbose: bool,
+) -> bool:
+    build_dirs = _batch_build_dirs(config_file_path, project_root, build_root)
+    if build_dirs is None:
+        return False
+
+    for build_dir in build_dirs:
+        if not _reset_ntfc_build_config(build_dir, verbose):
+            return False
+    return True
 
 
 def run_batch_build_if_missing(
