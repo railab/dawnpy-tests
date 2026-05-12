@@ -6,6 +6,8 @@
 """Module containing the test command for Dawn."""
 
 from pathlib import Path
+from time import perf_counter
+from typing import TypedDict
 
 import click
 from dawnpy.cli.options import configure_cli_logging
@@ -23,6 +25,14 @@ from dawnpy.sources import DawnSourcesMissing
 
 from dawnpy_tests.dawn.check_env import check_test_environment
 from dawnpy_tests.dawn.test_steps import StepDefinition, build_test_steps
+
+
+class StepExecutionStats(TypedDict):
+    """Execution statistics for one enabled test step."""
+
+    name: str
+    elapsed: float
+    passed: bool
 
 
 def _resolve_default_path(path_str: str, dawn_root: Path) -> Path:
@@ -114,16 +124,26 @@ def _check_test_prerequisites() -> None:
 
 def _run_test_steps(
     test_steps: list[StepDefinition], verbose: bool
-) -> list[str]:
-    """Execute enabled test steps and return list of failed steps."""
+) -> tuple[list[str], list[StepExecutionStats]]:
+    """Execute enabled test steps and return failures plus timing stats."""
     failed_steps: list[str] = []
+    step_stats: list[StepExecutionStats] = []
     for step in test_steps:
         if not step["enabled"]:
             print_verbose(f"Skipping step: {step['name']}", verbose)
             continue
 
         click.echo()
+        start = perf_counter()
         step_result = step["function"](*step["args"])
+        elapsed = perf_counter() - start
+        step_stats.append(
+            {
+                "name": step["name"],
+                "elapsed": elapsed,
+                "passed": step_result,
+            }
+        )
 
         if not step_result:
             failed_steps.append(step["name"])
@@ -135,11 +155,18 @@ def _run_test_steps(
             break
         else:
             click.echo()  # pragma: no cover
-    return failed_steps
+    return failed_steps, step_stats
+
+
+def _format_elapsed(elapsed: float) -> str:
+    """Format elapsed seconds for human-readable summaries."""
+    return f"{elapsed:.2f}s"
 
 
 def _print_test_summary(
-    test_steps: list[StepDefinition], failed_steps: list[str]
+    test_steps: list[StepDefinition],
+    failed_steps: list[str],
+    step_stats: list[StepExecutionStats],
 ) -> None:
     """Print final test execution summary."""
     click.echo()
@@ -156,6 +183,22 @@ def _print_test_summary(
         click.echo("Failed steps:")
         for step_name in failed_steps:
             click.echo(f"  {colored('[ERR]', 'red')} {step_name}")
+
+    click.echo()
+    click.echo("Execution time:")
+    if step_stats:
+        for stat in step_stats:
+            status = colored("[OK]", "green")
+            if not stat["passed"]:
+                status = colored("[ERR]", "red")
+            click.echo(
+                f"  {status} {stat['name']}: "
+                f"{_format_elapsed(stat['elapsed'])}"
+            )
+    else:
+        click.echo("  No test steps executed")
+    total_elapsed = sum(stat["elapsed"] for stat in step_stats)
+    click.echo(f"Total execution time: {_format_elapsed(total_elapsed)}")
 
     click.echo()
 
@@ -205,8 +248,8 @@ def do_cmd_test(
         size_only,
     )
 
-    failed_steps = _run_test_steps(test_steps, verbose)
-    _print_test_summary(test_steps, failed_steps)
+    failed_steps, step_stats = _run_test_steps(test_steps, verbose)
+    _print_test_summary(test_steps, failed_steps, step_stats)
 
     if failed_steps:
         raise SystemExit(1)
