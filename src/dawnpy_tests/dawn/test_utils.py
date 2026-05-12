@@ -427,6 +427,85 @@ def _normalize_ntfc_manifest(manifest_path: Path) -> Path:
     return normalized_manifest
 
 
+def _ntfc_product_build_dirs(config_path: Path) -> list[Path]:
+    with config_path.open(encoding="utf-8") as handle:
+        config = yaml.safe_load(handle) or {}
+
+    common = config.get("config", {})
+    build_root = Path(str(common.get("build_dir", "./build")))
+    build_dirs: list[Path] = []
+
+    for product_key, product in config.items():
+        if "product" not in product_key or not isinstance(product, dict):
+            continue
+        product_name = product.get("name")
+        cores = product.get("cores", {})
+        if not isinstance(product_name, str) or not isinstance(cores, dict):
+            continue
+
+        for core in cores.values():
+            if not isinstance(core, dict) or "defconfig" not in core:
+                continue
+            core_name = core.get("name")
+            if not isinstance(core_name, str):
+                continue
+            build_dirs.append(
+                build_root / f"{product_key}-{product_name}-{core_name}"
+            )
+
+    return build_dirs
+
+
+def _unlink_if_exists(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+
+
+def _reset_ntfc_build_config(build_dir: Path, verbose: bool = False) -> bool:
+    if not build_dir.exists():
+        return True
+
+    if (build_dir / "build.ninja").is_file():
+        cmd = [
+            "cmake",
+            "--build",
+            str(build_dir),
+            "--target",
+            "distcleanconfig",
+        ]
+        result = subprocess.run(
+            cmd,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            print_verbose(
+                f"Reset NTFC generated config in '{build_dir}'", verbose
+            )
+            return True
+
+    for path in (
+        build_dir / ".config",
+        build_dir / ".config.orig",
+        build_dir / ".config.prev",
+        build_dir / "include" / "nuttx" / "config.h",
+    ):
+        _unlink_if_exists(path)
+
+    print_verbose(f"Reset NTFC generated config in '{build_dir}'", verbose)
+    return True
+
+
+def _reset_ntfc_session_configs(config_path: Path, verbose: bool) -> bool:
+    for build_dir in _ntfc_product_build_dirs(config_path):
+        if not _reset_ntfc_build_config(build_dir, verbose):
+            return False
+    return True
+
+
 def run_ntfc_tests(
     project_root: Path, manifest_path: Path, verbose: bool = False
 ) -> bool:
@@ -463,6 +542,9 @@ def run_ntfc_tests(
         testpath = session.get("testpath")
         if not isinstance(confpath, str) or not isinstance(testpath, str):
             print_error(f"Invalid NTFC session paths: {name}")
+            return False
+
+        if not _reset_ntfc_session_configs(Path(confpath), verbose):
             return False
 
         cmd = [
