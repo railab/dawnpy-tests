@@ -13,8 +13,8 @@ import pytest
 from dawnpy_tests.dawn.check_env import check_test_environment
 from dawnpy_tests.dawn.test_steps import build_test_steps
 from dawnpy_tests.dawn.test_utils import (
-    _emit_remaining_output,
     _dawnpy_env,
+    _emit_remaining_output,
     analyze_build_sizes,
     get_arm_binary_size,
     run_batch_build,
@@ -373,6 +373,16 @@ def test_run_ntfc_tests_runs_manifest_sessions_individually(
         "      defconfig: ../../boards/sim/sim/sim/configs/nsh_tests\n",
         encoding="utf-8",
     )
+    stale_build = root / "build" / "product-demo-main"
+    stale_include = stale_build / "include" / "nuttx"
+    stale_include.mkdir(parents=True)
+    for stale_file in (
+        stale_build / ".config",
+        stale_build / ".config.orig",
+        stale_build / ".config.prev",
+        stale_include / "config.h",
+    ):
+        stale_file.write_text("stale\n", encoding="utf-8")
 
     captured: list[list[str]] = []
     monkeypatch.chdir(root)
@@ -397,6 +407,10 @@ def test_run_ntfc_tests_runs_manifest_sessions_individually(
     assert not any(arg.startswith("--manifest=") for arg in captured[0])
     assert any(arg.startswith("--confpath=") for arg in captured[0])
     assert any(arg.startswith("--testpath=") for arg in captured[0])
+    assert not (stale_build / ".config").exists()
+    assert not (stale_build / ".config.orig").exists()
+    assert not (stale_build / ".config.prev").exists()
+    assert not (stale_include / "config.h").exists()
 
 
 def test_get_arm_binary_size(monkeypatch: pytest.MonkeyPatch) -> None:
