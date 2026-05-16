@@ -13,6 +13,7 @@ dependencies = [
   "dawnpy-serial",
   "dawnpy-can",
   "dawnpy-udp",
+  "dawnpy-lwm2m",
   "dawnpy-modbus",
   "click>=8.1",
   "ntfc>=0.0.2",

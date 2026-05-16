@@ -10,6 +10,7 @@ extensions:
 - `dawnpy-serial`
 - `dawnpy-can`
 - `dawnpy-udp`
+- `dawnpy-lwm2m`
 - `dawnpy-modbus`
 
 It exposes the standalone `dawnpy-tests` CLI and keeps the QA runner aligned

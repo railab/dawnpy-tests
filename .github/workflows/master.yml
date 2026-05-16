@@ -45,6 +45,10 @@ jobs:
         with:
           repository: railab/dawnpy-modbus
           path: dawnpy-modbus
+      - uses: actions/checkout@v3
+        with:
+          repository: railab/dawnpy-lwm2m
+          path: dawnpy-lwm2m
       - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python }}
