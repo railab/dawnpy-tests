@@ -239,6 +239,63 @@ def test_cmd_test_size_only_skips_prerequisites(
     )
 
 
+@pytest.mark.parametrize(
+    ("batch_only", "skip_ntfc"),
+    [
+        (True, False),
+        (False, True),
+    ],
+)
+def test_cmd_test_non_ntfc_runs_skip_prerequisites(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    batch_only: bool,
+    skip_ntfc: bool,
+) -> None:
+    from dawnpy_tests.commands.cmd_test import do_cmd_test
+
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._validate_project_root",
+        lambda *a: True,
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._resolve_test_context",
+        lambda *a, **k: (tmp_path, tmp_path / "config", tmp_path / "manifest"),
+    )
+
+    def fail_if_called():
+        raise AssertionError("check_test_environment should not be called")
+
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.check_test_environment",
+        fail_if_called,
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.build_test_steps",
+        lambda *a, **k: [
+            {
+                "name": "batch_build",
+                "enabled": True,
+                "function": lambda *args: True,
+                "args": [],
+            }
+        ],
+    )
+
+    do_cmd_test(
+        "config",
+        "root",
+        "test_dir",
+        60,
+        None,
+        True,
+        batch_only,
+        skip_ntfc,
+        False,
+        "list",
+    )
+
+
 def test_cmd_test_step_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
