@@ -106,8 +106,8 @@ def _validate_test_args(
 
 
 def _check_test_prerequisites() -> None:
-    """Check test environment prerequisites."""
-    print_info("Checking test environment prerequisites...")
+    """Check NTFC test environment prerequisites."""
+    print_info("Checking NTFC test environment prerequisites...")
     if not check_test_environment():
         print_warning(
             "Test environment is not ready (missing 'can0' interface)"
@@ -156,6 +156,13 @@ def _run_test_steps(
         else:
             click.echo()  # pragma: no cover
     return failed_steps, step_stats
+
+
+def _step_enabled(test_steps: list[StepDefinition], step_name: str) -> bool:
+    """Return whether a named step is enabled."""
+    return any(
+        step["name"] == step_name and step["enabled"] for step in test_steps
+    )
 
 
 def _format_elapsed(elapsed: float) -> str:
@@ -228,11 +235,6 @@ def do_cmd_test(
 
     _validate_test_args(ntfc_only, batch_only, skip_ntfc, size_only)
 
-    if not size_only:
-        click.echo()
-        _check_test_prerequisites()
-        click.echo()
-
     test_steps = build_test_steps(
         project_root,
         str(config_path),
@@ -247,6 +249,11 @@ def do_cmd_test(
         ntfc_only,
         size_only,
     )
+
+    if _step_enabled(test_steps, "ntfc_tests"):
+        click.echo()
+        _check_test_prerequisites()
+        click.echo()
 
     failed_steps, step_stats = _run_test_steps(test_steps, verbose)
     _print_test_summary(test_steps, failed_steps, step_stats)
