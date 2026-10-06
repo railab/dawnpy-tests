@@ -519,3 +519,78 @@ def test_normalize_ntfc_manifest_preserves_ntfc_path_semantics(
     assert str(config) not in content
     assert str(testpath) in content
     assert str(defconfig) in normalized_config
+
+
+def test_manifest_needs_can(tmp_path: Path) -> None:
+    from dawnpy_tests.commands.cmd_test import _manifest_needs_can
+
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(
+        "sessions:\n  - name: a\n    resources: [hw-ppk2]\n  - junk\n",
+        encoding="utf-8",
+    )
+    assert not _manifest_needs_can(manifest)
+
+    manifest.write_text(
+        "sessions:\n  - name: a\n  - name: b\n    resources: [vcan0]\n",
+        encoding="utf-8",
+    )
+    assert _manifest_needs_can(manifest)
+
+    manifest.write_text("[]\n", encoding="utf-8")
+    assert not _manifest_needs_can(manifest)
+
+    manifest.write_text("sessions: [\n", encoding="utf-8")
+    assert _manifest_needs_can(manifest)
+    assert _manifest_needs_can(tmp_path / "missing.yaml")
+
+
+def test_cmd_test_skips_can_check_without_vcan(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from dawnpy_tests.commands.cmd_test import do_cmd_test
+
+    manifest = tmp_path / "manifest.yaml"
+    manifest.write_text(
+        "sessions:\n  - name: a\n    resources: [hw-ppk2]\n",
+        encoding="utf-8",
+    )
+
+    def no_env() -> bool:
+        raise AssertionError("check_test_environment should not be called")
+
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._validate_project_root",
+        lambda *a: True,
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.check_test_environment", no_env
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test.build_test_steps",
+        lambda *a, **k: [
+            {
+                "name": "ntfc_tests",
+                "enabled": True,
+                "function": lambda: True,
+                "args": [],
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        "dawnpy_tests.commands.cmd_test._resolve_test_context",
+        lambda *a, **k: (tmp_path, tmp_path / "config", manifest),
+    )
+
+    do_cmd_test(
+        "config",
+        "root",
+        "test_dir",
+        60,
+        None,
+        True,
+        False,
+        False,
+        True,
+        "list",
+    )
