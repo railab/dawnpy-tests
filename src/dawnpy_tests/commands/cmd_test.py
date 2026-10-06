@@ -10,6 +10,7 @@ from time import perf_counter
 from typing import TypedDict
 
 import click
+import yaml
 from dawnpy.cli.options import configure_cli_logging
 from dawnpy.dawn.output import (
     colored,
@@ -103,6 +104,27 @@ def _validate_test_args(
     if size_only and skip_ntfc:
         print_error("--size-only cannot be combined with --skip-ntfc")
         raise SystemExit(1)
+
+
+def _manifest_needs_can(manifest_path: Path) -> bool:
+    """Return whether a manifest session uses the virtual CAN interface.
+
+    An unreadable manifest counts as needing it, so the check still runs.
+    """
+    try:
+        with manifest_path.open(encoding="utf-8") as handle:
+            manifest = yaml.safe_load(handle) or {}
+    except (OSError, yaml.YAMLError):
+        return True
+
+    sessions = (
+        manifest.get("sessions", []) if isinstance(manifest, dict) else []
+    )
+    return any(
+        "vcan0" in (session.get("resources") or [])
+        for session in sessions
+        if isinstance(session, dict)
+    )
 
 
 def _check_test_prerequisites() -> None:
@@ -250,7 +272,9 @@ def do_cmd_test(
         size_only,
     )
 
-    if _step_enabled(test_steps, "ntfc_tests"):
+    if _step_enabled(test_steps, "ntfc_tests") and _manifest_needs_can(
+        manifest_path
+    ):
         click.echo()
         _check_test_prerequisites()
         click.echo()
