@@ -144,12 +144,15 @@ def test_run_format_check(
     script.parent.mkdir(parents=True)
     script.write_text("#!/bin/sh\n", encoding="utf-8")
 
-    monkeypatch.setattr(
-        subprocess,
-        "run",
-        lambda *a, **k: subprocess.CompletedProcess(a[0], 0, "out", "err"),
-    )
+    calls = []
+
+    def run_ok(*args, **kwargs):
+        calls.append(args[0])
+        return subprocess.CompletedProcess(args[0], 0, "out", "err")
+
+    monkeypatch.setattr(subprocess, "run", run_ok)
     assert run_format_check(project_root, verbose=True) is True
+    assert calls == [[str(script), "check"]]
 
     monkeypatch.setattr(
         subprocess,
