@@ -73,8 +73,8 @@ def _dawnpy_env(project_root: Path) -> dict[str, str]:
 
 
 def run_format_check(project_root: Path, verbose: bool) -> bool:
-    """Run code format check and fix."""
-    print_info("Step 0: Running code format check and fix...")
+    """Run code format check; fail on unformatted files."""
+    print_info("Step 0: Running code format check...")
     click.echo()
 
     script_path = project_root / "tools" / "scripts" / "check-format.sh"
@@ -83,16 +83,16 @@ def run_format_check(project_root: Path, verbose: bool) -> bool:
         print_error(f"Format check script not found: {script_path}")
         return False
 
-    print_verbose(f"Running: {script_path} fix", verbose=True)
+    print_verbose(f"Running: {script_path} check", verbose=True)
 
     if not run_capture_echo(
-        [str(script_path), "fix"],
+        [str(script_path), "check"],
         cwd=project_root,
         error_message="Format check failed",
     ):
         return False
 
-    print_success("Code format check and fix completed successfully")
+    print_success("Code format check completed successfully")
     return True
 
 
